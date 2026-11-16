@@ -6,6 +6,9 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from treaty_tracker.commitments.pledge import Decision, DomainRecord, canonical_json, stable_hash, utc_now
+from treaty_tracker.trends.comparable_trends import verify_trend_analysis
+
+TREND_FILE = "trend-analysis.json"
 
 
 def ensure_output(path: str | Path) -> Path:
@@ -60,7 +63,8 @@ def build_summary(records: list[DomainRecord], decisions: Mapping[str, Decision]
 
 
 def export_bundle(output: str | Path, records: list[DomainRecord], decisions: Mapping[str, Decision],
-                  snapshot: Mapping[str, Any], events: list[dict[str, Any]]) -> dict[str, Any]:
+                  snapshot: Mapping[str, Any], events: list[dict[str, Any]],
+                  trend_analysis: Mapping[str, Any] | None = None) -> dict[str, Any]:
     root = ensure_output(output)
     summary = build_summary(records, decisions, snapshot)
     record_count = write_records(root / "records.csv", records, decisions)
@@ -68,8 +72,11 @@ def export_bundle(output: str | Path, records: list[DomainRecord], decisions: Ma
     summary_hash = write_json(root / "summary.json", summary)
     decision_hash = write_json(root / "decisions.json", [value.as_dict() for _, value in sorted(decisions.items())])
     event_hash = write_json(root / "audit-events.json", events)
-    manifest = {"files": {"summary.json": summary_hash, "decisions.json": decision_hash,
-                           "audit-events.json": event_hash}, "record_rows": record_count,
+    files = {"summary.json": summary_hash, "decisions.json": decision_hash,
+             "audit-events.json": event_hash}
+    if trend_analysis is not None:
+        files[TREND_FILE] = write_json(root / TREND_FILE, trend_analysis)
+    manifest = {"files": files, "record_rows": record_count,
                 "rule_rows": rule_count, "created_at": utc_now()}
     manifest["manifest_hash"] = stable_hash(manifest)
     write_json(root / "manifest.json", manifest)
@@ -94,4 +101,24 @@ def verify_bundle(output: str | Path) -> list[str]:
         value = json.loads(path.read_text(encoding="utf-8"))
         if stable_hash(value) != expected:
             errors.append(f"{name} hash mismatch")
+    return errors
+
+
+def verify_trend_bundle(output: str | Path, repository: Any) -> list[str]:
+    """审查冻结的趋势报告：以台账版本与证据事件为准，不重算旧报告。"""
+    root = Path(output)
+    errors: list[str] = []
+    manifest_path = root / "manifest.json"
+    if not manifest_path.is_file():
+        return ["manifest.json is missing"]
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if TREND_FILE not in manifest.get("files", {}):
+        return [f"{TREND_FILE} is missing from manifest"]
+    path = root / TREND_FILE
+    if not path.is_file():
+        return [f"{TREND_FILE} is missing"]
+    report = json.loads(path.read_text(encoding="utf-8"))
+    if stable_hash(report) != manifest["files"][TREND_FILE]:
+        errors.append(f"{TREND_FILE} hash mismatch")
+    errors.extend(verify_trend_analysis(report, repository))
     return errors

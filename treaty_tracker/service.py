@@ -7,14 +7,16 @@ from typing import Any, Mapping
 from treaty_tracker.commitments.pledge import ContractError, Decision, DomainRecord, records_from_fixture, stable_hash
 from treaty_tracker.ledger.evidence_log import Repository
 from treaty_tracker.lifecycle.fulfillment import advance_for_outcome, decide
-from treaty_tracker.disclosure.member_report import export_bundle, verify_bundle
+from treaty_tracker.disclosure.member_report import export_bundle, verify_bundle, verify_trend_bundle
 from treaty_tracker.harmonization.progress_model import derive_context
 
 from treaty_tracker.progress_signal.commitment_health import augment_context
+from treaty_tracker.trends.comparable_trends import build_trend_analysis
 
 class Application:
-    def __init__(self, database: str | Path, context: Mapping[str, Any] | None = None):
-        self.repository = Repository(database)
+    def __init__(self, database: str | Path, context: Mapping[str, Any] | None = None,
+                 clock: Any | None = None):
+        self.repository = Repository(database, clock=clock)
         self.context = dict(context or {})
 
     def ingest(self, record: DomainRecord) -> DomainRecord:
@@ -57,9 +59,13 @@ class Application:
         snapshot = self.repository.snapshot()
         if snapshot["chain_errors"]:
             raise ContractError("audit chain verification failed")
-        manifest = export_bundle(output, final_records, decisions, snapshot, self.repository.event_rows())
+        trend_analysis = build_trend_analysis(self.repository)
+        manifest = export_bundle(output, final_records, decisions, snapshot, self.repository.event_rows(),
+                                 trend_analysis=trend_analysis)
         result = {"run_id": run_id, "fixture_hash": fixture_hash, "records": len(final_records),
-                  "decisions": len(decisions), "manifest": manifest, "snapshot": snapshot}
+                  "decisions": len(decisions), "manifest": manifest, "snapshot": snapshot,
+                  "trend_periods": len(trend_analysis["periods"]),
+                  "trend_comparisons": len(trend_analysis["comparisons"])}
         self.repository.finish_run(run_id, result)
         return result
 
@@ -87,5 +93,7 @@ def verify(database: str | Path, output: str | Path) -> dict[str, Any]:
     repository = Repository(database)
     chain_errors = repository.verify_chain()
     bundle_errors = verify_bundle(output)
-    return {"ok": not chain_errors and not bundle_errors, "chain_errors": chain_errors,
-            "bundle_errors": bundle_errors, "snapshot": repository.snapshot()}
+    trend_errors = verify_trend_bundle(output, repository)
+    return {"ok": not chain_errors and not bundle_errors and not trend_errors,
+            "chain_errors": chain_errors, "bundle_errors": bundle_errors,
+            "trend_errors": trend_errors, "snapshot": repository.snapshot()}

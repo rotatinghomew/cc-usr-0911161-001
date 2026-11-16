@@ -67,9 +67,10 @@ CREATE INDEX IF NOT EXISTS idx_decisions_record ON decisions(record_id, decided_
 
 
 class Repository:
-    def __init__(self, database: str | Path):
+    def __init__(self, database: str | Path, clock: Any | None = None):
         self.database = str(database)
         self._lock = threading.RLock()
+        self.clock = clock or utc_now
         Path(self.database).parent.mkdir(parents=True, exist_ok=True)
         self.initialize()
 
@@ -105,7 +106,7 @@ class Repository:
     def append_event(self, connection: sqlite3.Connection, event_type: str,
                      aggregate_id: str, aggregate_version: int, payload: Mapping[str, Any]) -> str:
         previous = self._last_hash(connection)
-        created_at = utc_now()
+        created_at = self.clock()
         event_hash = stable_hash({"event_type": event_type, "aggregate_id": aggregate_id,
                                   "aggregate_version": aggregate_version, "payload": payload,
                                   "previous_hash": previous, "created_at": created_at})
@@ -133,9 +134,9 @@ class Repository:
             payload = canonical_json(record.payload)
             connection.execute("INSERT INTO records(record_id,version,state,payload_json,fingerprint,occurred_at,source,updated_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(record_id) DO UPDATE SET version=excluded.version,state=excluded.state,payload_json=excluded.payload_json,fingerprint=excluded.fingerprint,occurred_at=excluded.occurred_at,source=excluded.source,updated_at=excluded.updated_at",
                                (record.record_id, record.version, record.state, payload, record.fingerprint,
-                                record.occurred_at, record.source, utc_now()))
+                                record.occurred_at, record.source, self.clock()))
             connection.execute("INSERT INTO record_versions(record_id,version,state,payload_json,fingerprint,stored_at) VALUES(?,?,?,?,?,?)",
-                               (record.record_id, record.version, record.state, payload, record.fingerprint, utc_now()))
+                               (record.record_id, record.version, record.state, payload, record.fingerprint, self.clock()))
             self.append_event(connection, "record.saved", record.record_id, record.version,
                               {"state": record.state, "fingerprint": record.fingerprint})
             return record.fingerprint
@@ -165,14 +166,18 @@ class Repository:
     def save_decision(self, decision: Decision) -> str:
         decision_id = decision.fingerprint
         with self.transaction() as connection:
-            if not connection.execute("SELECT 1 FROM records WHERE record_id=?", (decision.record_id,)).fetchone():
+            row = connection.execute("SELECT version,fingerprint FROM records WHERE record_id=?", (decision.record_id,)).fetchone()
+            if not row:
                 raise ContractError("decision record does not exist")
+            decided_version = row["version"]
             body = canonical_json(decision.as_dict())
             connection.execute("INSERT OR IGNORE INTO decisions(decision_id,record_id,outcome,score,decision_json,decided_at) VALUES(?,?,?,?,?,?)",
                                (decision_id, decision.record_id, decision.outcome, decision.score, body, decision.decided_at))
             self.append_event(connection, "decision.saved", decision.record_id,
                               self.event_count(decision.record_id, connection) + 1,
-                              {"decision_id": decision_id, "outcome": decision.outcome, "score": decision.score})
+                              {"decision_id": decision_id, "outcome": decision.outcome, "score": decision.score,
+                               "record_version": decided_version, "record_fingerprint": row["fingerprint"],
+                               "advanced_record_version": decided_version + 1})
         return decision_id
 
     def event_count(self, aggregate_id: str, connection: sqlite3.Connection | None = None) -> int:
@@ -192,7 +197,7 @@ class Repository:
             if row and (row[0] != fixture_hash or row[1] != record_count):
                 raise ContractError("run identifier collision")
             connection.execute("INSERT OR IGNORE INTO runs(run_id,fixture_hash,status,record_count,result_json,started_at) VALUES(?,?,?,?,?,?)",
-                               (run_id, fixture_hash, "running", record_count, "{}", utc_now()))
+                               (run_id, fixture_hash, "running", record_count, "{}", self.clock()))
         return run_id
 
     def completed_run(self, run_id: str) -> dict[str, Any] | None:
@@ -208,7 +213,7 @@ class Repository:
     def finish_run(self, run_id: str, result: Mapping[str, Any]) -> None:
         with self.transaction() as connection:
             changed = connection.execute("UPDATE runs SET status='finished',result_json=?,finished_at=? WHERE run_id=?",
-                                         (canonical_json(result), utc_now(), run_id)).rowcount
+                                         (canonical_json(result), self.clock(), run_id)).rowcount
             if changed != 1:
                 raise ContractError("unknown run")
             self.append_event(connection, "run.finished", run_id, 1, dict(result))
@@ -246,3 +251,46 @@ class Repository:
         with self.connect() as connection:
             rows = connection.execute("SELECT * FROM events ORDER BY event_id").fetchall()
         return [dict(row) | {"payload": json.loads(row["payload_json"])} for row in rows]
+
+    def version_rows(self) -> list[dict[str, Any]]:
+        """Return every immutable record version in version order."""
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT record_id,version,state,payload_json,fingerprint,stored_at FROM record_versions "
+                "ORDER BY record_id,version").fetchall()
+        return [{"record_id": row["record_id"], "version": row["version"], "state": row["state"],
+                 "payload": json.loads(row["payload_json"]), "fingerprint": row["fingerprint"],
+                 "stored_at": row["stored_at"]} for row in rows]
+
+    def record_saved_events(self) -> list[dict[str, Any]]:
+        """Return the hash-chained evidence events proving when each version was submitted."""
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT event_id,aggregate_id,aggregate_version,event_hash,previous_hash,created_at,payload_json "
+                "FROM events WHERE event_type='record.saved' ORDER BY event_id").fetchall()
+        return [{"event_id": row["event_id"], "record_id": row["aggregate_id"],
+                 "version": row["aggregate_version"], "event_hash": row["event_hash"],
+                 "previous_hash": row["previous_hash"], "created_at": row["created_at"],
+                 "payload": json.loads(row["payload_json"])} for row in rows]
+
+    def decision_event_index(self) -> dict[tuple[str, int], dict[str, Any]]:
+        """Map (record_id, record_version) to the decision evidence stored for that version.
+
+        决策针对推进前版本作出，同一轮的推进版本同样关联该决策，因此两个版本
+        键都会建立映射，保证逐条判定可以追溯到采用版本。
+        """
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT aggregate_id,payload_json,created_at FROM events WHERE event_type='decision.saved' ORDER BY event_id").fetchall()
+        index: dict[tuple[str, int], dict[str, Any]] = {}
+        for row in rows:
+            payload = json.loads(row["payload_json"])
+            version = payload.get("record_version")
+            if version is None:
+                continue
+            entry = {"payload": payload, "created_at": row["created_at"]}
+            index[(row["aggregate_id"], int(version))] = entry
+            advanced = payload.get("advanced_record_version")
+            if advanced is not None:
+                index.setdefault((row["aggregate_id"], int(advanced)), entry)
+        return index
