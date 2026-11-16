@@ -1,0 +1,158 @@
+{
+  "scenario": "人工智能合作组织成员承诺履约证据台",
+  "synthetic": true,
+  "records": [
+    {
+      "record_id": "commitment_case-001",
+      "payload": {
+        "progress_pct": 12.0,
+        "legal_readiness": 13.9,
+        "evidence_count": 15.8,
+        "commitment_area": "commitment_area-3",
+        "audit_findings": 19.6,
+        "unresolved_gaps": 21.5,
+        "beneficiary_share": 23.4,
+        "member_code": "member_code-2",
+        "deadline_days": 27.2,
+        "data_quality": 0.47,
+        "review_score": 0.58,
+        "public_status": "public_status-1"
+      },
+      "state": "pledged",
+      "source": "synthetic-local-acceptance"
+    },
+    {
+      "record_id": "commitment_case-002",
+      "payload": {
+        "progress_pct": 15.7,
+        "legal_readiness": 17.6,
+        "evidence_count": 19.5,
+        "commitment_area": "commitment_area-4",
+        "audit_findings": 23.3,
+        "unresolved_gaps": 25.2,
+        "beneficiary_share": 27.1,
+        "member_code": "member_code-3",
+        "deadline_days": 30.9,
+        "data_quality": 0.58,
+        "review_score": 0.69,
+        "public_status": "public_status-2"
+      },
+      "state": "pledged",
+      "source": "synthetic-local-acceptance"
+    },
+    {
+      "record_id": "commitment_case-003",
+      "payload": {
+        "progress_pct": 19.4,
+        "legal_readiness": 21.3,
+        "evidence_count": 23.2,
+        "commitment_area": "commitment_area-0",
+        "audit_findings": 27.0,
+        "unresolved_gaps": 28.9,
+        "beneficiary_share": 30.8,
+        "member_code": "member_code-4",
+        "deadline_days": 34.6,
+        "data_quality": 0.69,
+        "review_score": 0.8,
+        "public_status": "public_status-3"
+      },
+      "state": "pledged",
+      "source": "synthetic-local-acceptance"
+    },
+    {
+      "record_id": "commitment_case-004",
+      "payload": {
+        "progress_pct": 23.1,
+        "legal_readiness": 25.0,
+        "evidence_count": 26.9,
+        "commitment_area": "commitment_area-1",
+        "audit_findings": 30.7,
+        "unresolved_gaps": 32.6,
+        "beneficiary_share": 34.5,
+        "member_code": "member_code-0",
+        "deadline_days": 38.3,
+        "data_quality": 0.8,
+        "review_score": 0.91,
+        "public_status": "public_status-4"
+      },
+      "state": "pledged",
+      "source": "synthetic-local-acceptance"
+    },
+    {
+      "record_id": "commitment_case-005",
+      "payload": {
+        "progress_pct": 26.8,
+        "legal_readiness": 28.7,
+        "evidence_count": 30.6,
+        "commitment_area": "commitment_area-2",
+        "audit_findings": 34.4,
+        "unresolved_gaps": 36.3,
+        "beneficiary_share": 38.2,
+        "member_code": "member_code-1",
+        "deadline_days": 42.0,
+        "data_quality": 0.91,
+        "review_score": 0.25,
+        "public_status": "public_status-0"
+      },
+      "state": "pledged",
+      "source": "synthetic-local-acceptance"
+    },
+    {
+      "record_id": "commitment_case-006",
+      "payload": {
+        "progress_pct": 30.5,
+        "legal_readiness": 32.4,
+        "evidence_count": 34.3,
+        "commitment_area": "commitment_area-3",
+        "audit_findings": 38.1,
+        "unresolved_gaps": 40.0,
+        "beneficiary_share": 41.9,
+        "member_code": "member_code-2",
+        "deadline_days": 45.7,
+        "data_quality": 0.25,
+        "review_score": 0.36,
+        "public_status": "public_status-1"
+      },
+      "state": "pledged",
+      "source": "synthetic-local-acceptance"
+    },
+    {
+      "record_id": "commitment_case-007",
+      "payload": {
+        "progress_pct": 34.2,
+        "legal_readiness": 36.1,
+        "evidence_count": 38.0,
+        "commitment_area": "commitment_area-4",
+        "audit_findings": 41.8,
+        "unresolved_gaps": 43.7,
+        "beneficiary_share": 45.6,
+        "member_code": "member_code-3",
+        "deadline_days": 49.4,
+        "data_quality": 0.36,
+        "review_score": 0.47,
+        "public_status": "public_status-2"
+      },
+      "state": "pledged",
+      "source": "synthetic-local-acceptance"
+    },
+    {
+      "record_id": "commitment_case-008",
+      "payload": {
+        "progress_pct": 37.9,
+        "legal_readiness": 39.8,
+        "evidence_count": 41.7,
+        "commitment_area": "commitment_area-0",
+        "audit_findings": 45.5,
+        "unresolved_gaps": 47.4,
+        "beneficiary_share": 49.3,
+        "member_code": "member_code-4",
+        "deadline_days": 53.1,
+        "data_quality": 0.47,
+        "review_score": 0.58,
+        "public_status": "public_status-3"
+      },
+      "state": "pledged",
+      "source": "synthetic-local-acceptance"
+    }
+  ]
+}
