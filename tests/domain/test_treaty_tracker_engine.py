@@ -12,14 +12,14 @@ class Repo:
 
 class FusionTests(unittest.TestCase):
     def record(self, key, origin="gx"):
-        return DomainRecord(key, {"progress_pct": 18, "legal_readiness": 74, "evidence_count": 108, "commitment_area": "purple",
+        return DomainRecord(key, {"progress_pct": 82, "legal_readiness": 74, "evidence_count": 10, "commitment_area": "governance",
             "audit_findings": 1, "unresolved_gaps": 0.5, "beneficiary_share": 0.8, "member_code": origin,
-            "deadline_days": 18, "data_quality": 0.98, "review_score": 0.94, "public_status": "premium"})
+            "deadline_days": 18, "data_quality": 0.98, "review_score": 0.94, "public_status": "reviewed"})
 
     def test_probabilities_sum_to_one(self):
         values = fulfillment_probability(self.record("a"))
         self.assertAlmostEqual(sum(values.values()), 1.0)
-        self.assertGreater(values["premium"], values["processing"])
+        self.assertGreater(values["fulfilled"], values["at_risk"])
 
     def test_batch_and_member_drift(self):
         rows = [self.record("a", "north"), self.record("b", "south")]
